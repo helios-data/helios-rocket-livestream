@@ -1,0 +1,233 @@
+/* Fixed 1920x1080 overlay layout for OBS browser sources: the page is exactly
+   one viewport tall and never scrolls/overflows (content fits or is clipped). */
+html.transparent, html.transparent body { background: transparent !important; }
+
+.overlay {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr 440px; /* video | right column */
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, var(--overlay-grad) 0%, var(--bg) 70%);
+}
+html.transparent .overlay { background: transparent; }
+
+/* One camera: size the column to fit the 16:9 video.
+   370px = 28 padding + 64 header + 12 gap + 24 panel padding + 12 gap + 230 strip. */
+.overlay.single {
+  grid-template-columns: calc((100vh - 370px) * 16 / 9 + 28px) minmax(440px, 1fr);
+}
+
+.ov-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 8px 18px;
+  height: 64px; /* used in the video width calc */
+}
+.ov-header .logo { height: 38px; }
+.ov-mission { display: flex; flex-direction: column; }
+.ov-mission .name { font-size: 22px; font-weight: 800; letter-spacing: 0.12em; }
+.ov-mission .sub { font-size: 11px; color: var(--text-dim); letter-spacing: 0.2em; }
+.ov-clocks { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+.ov-tclock { text-align: right; }
+.ov-tclock .big { font-family: var(--mono); font-size: 34px; font-weight: 700; line-height: 1; }
+.ov-tclock .lbl { font-size: 10px; color: var(--text-dim); letter-spacing: 0.2em; }
+
+/* Columns: never overflow their grid track. */
+.ov-main, .ov-right {
+  display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0;
+}
+
+/* No borders or backgrounds. */
+.ov-panel {
+  position: relative;
+  padding: 12px 14px;
+  min-height: 0;
+}
+.ov-panel > .h { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 8px; }
+
+.big-num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; line-height: 0.95; }
+
+/* Right column: the map fills the space left. */
+.ov-right .state-panel { flex: 0 0 auto; }
+.ov-right .gps-panel { flex: 1 1 auto; display: flex; flex-direction: column; }
+.gps-panel .map-fill { flex: 1 1 auto; min-height: 0; position: relative; }
+/* Map starts right under the title. */
+.ov-right .gps-panel { padding-top: 0; }
+.map-fill .map-toggle { position: absolute; top: 8px; right: 8px; z-index: 3; }
+.map-fill .map-toggle button { background: var(--bg); }
+/* Coordinates on the map's bottom-left corner. */
+.map-fill .map-info {
+  position: absolute; left: 8px; bottom: 8px; z-index: 3; max-width: calc(100% - 140px);
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 5px 9px; border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  font-size: 13px; color: var(--text); pointer-events: none;
+}
+/* Wrap instead of cutting off. */
+.map-info span { overflow-wrap: anywhere; }
+
+
+/* Video fills the height; the strip under it is fixed. */
+.ov-main .video-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ov-main .telemetry-panel { flex: 0 0 auto; height: 230px; display: flex; gap: 24px; }
+
+/* Rocket in the bottom-left. */
+.rocket-slot { flex: 0 0 180px; position: relative; }
+.rocket-slot .rocket-canvas { position: absolute; inset: 0; }
+
+/* Numbers on top, chart below. */
+.telemetry-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+/* Number row: equal, aligned columns. */
+.num-bar { display: grid; gap: 0 24px; align-items: start; }
+.num-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.num-label { font-size: 11px; letter-spacing: 0.12em; color: var(--text-dim); }
+.num-value { font-size: 26px; white-space: nowrap; }
+.num-unit { font-size: 0.5em; color: var(--text-dim); margin-left: 4px; font-weight: 500; }
+.num-detail { font-size: 12px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* One camera: smaller numbers so the chart gets more room. */
+.overlay.single .telemetry-body { gap: 6px; }
+/* No top padding. */
+.overlay.single .telemetry-panel { padding-top: 0; }
+.overlay.single .num-item { gap: 1px; }
+.overlay.single .num-label { font-size: 10px; }
+.overlay.single .num-value { font-size: 19px; }
+.overlay.single .num-detail { font-size: 11px; }
+.overlay.single .rocket-slot { flex-basis: 140px; }
+.overlay.single .telemetry-panel { gap: 16px; }
+.degraded-note { color: var(--warn); font-size: 11px; }
+.num-bar.big .num-label { font-size: 13px; }
+.num-bar.big .num-value { font-size: 46px; }
+.num-bar.big .num-detail { font-size: 14px; }
+.tele-chart { flex: 1 1 auto; min-height: 0; }
+
+/* Small label. */
+.phase-label { font-size: 11px; letter-spacing: 0.16em; color: var(--text-dim); }
+/* Post-flight title. */
+.summary-title { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; }
+.num-bar.big + .tele-chart, .summary-title + .num-bar { margin-top: 2px; }
+
+/* Pre-launch: countdown | rocket name | facts. */
+.phase-strip { display: flex; align-items: center; justify-content: space-between; height: 100%; }
+.phase-strip > * + * { border-left: 1px solid var(--line); padding-left: 56px; margin-left: 56px; }
+.phase-strip > * { flex: 1 1 0; min-width: 0; }
+.countdown { display: flex; flex-direction: column; gap: 10px; }
+.countdown-value { font-size: 72px; line-height: 1; white-space: nowrap; }
+.mission-id { display: flex; flex-direction: column; gap: 10px; }
+.mission-rocket { font-size: 56px; font-weight: 700; line-height: 1; }
+.mission-event { font-size: 18px; color: var(--text-dim); letter-spacing: 0.06em; }
+.overlay.pre .ov-right .sponsor-panel { flex: 1 1 auto; height: auto; }
+/* One camera, pre-launch: bigger video, 160px band at the bottom.
+   300px = 28 + 64 + 12 + 24 + 12 + 160. */
+.overlay.single.pre {
+  grid-template-rows: auto minmax(0, 1fr) 160px;
+  grid-template-columns: calc((100vh - 300px) * 16 / 9 + 28px) minmax(360px, 1fr);
+}
+.pre-band { min-height: 0; }
+.overlay.single .pre-band { grid-column: 1 / -1; }
+.pre-band .countdown-value { font-size: 52px; }
+.pre-band .mission-rocket { font-size: 40px; }
+.pre-band .mission-event { font-size: 15px; }
+.pre-band .num-bar.big .num-value { font-size: 34px; }
+
+/* Post-flight: small map, sponsors fill the rest. */
+.overlay.post .ov-right .gps-panel { flex: 0 0 auto; }
+.overlay.post .gps-panel .map-fill { flex: none; height: 260px; }
+.overlay.post .ov-right .sponsor-panel { flex: 1 1 auto; height: auto; }
+/* Two cameras, pre-launch: videos full width, band and sponsors below. */
+.overlay.dual.pre {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.overlay.dual.pre .ov-main { grid-column: 1 / -1; grid-row: 2; }
+.overlay.dual.pre .pre-band { grid-column: 1; grid-row: 3; }
+.overlay.dual.pre .ov-right { grid-column: 2; grid-row: 3; min-height: 0; }
+.overlay.dual.pre .pre-band .phase-strip { flex-direction: column; align-items: stretch; justify-content: space-evenly; }
+.overlay.dual.pre .pre-band .phase-strip > * { flex: 0 0 auto; }
+.overlay.dual.pre .pre-band .phase-strip > * + * {
+  border-left: none; margin-left: 0; padding-left: 0;
+  border-top: 1px solid var(--line); padding-top: 16px;
+}
+
+
+/* 16:9 video region that shrinks to fit the available height (height-limited). */
+.video-fit { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.video-box {
+  position: relative; height: 100%; aspect-ratio: 16 / 9; max-width: 100%; max-height: 100%;
+  background: #05070b; border-radius: 6px; overflow: hidden;
+  display: grid; place-items: center;
+}
+.video-box video { width: 100%; height: 100%; object-fit: cover; }
+
+/* Camera feeds; in two-camera mode each gets half the width. */
+.video-pair { flex: 1; min-height: 0; display: flex; gap: 12px; }
+.video-pair > .video-fit { flex: 1 1 0; min-width: 0; }
+.video-pair.dual .video-box { width: 100%; height: auto; }
+
+/* Two cameras: video panel shrinks, strip gets the extra height. */
+.ov-main.dual .video-panel { flex: 0 0 auto; }
+.ov-main.dual .video-pair { flex: none; }
+.ov-main.dual .telemetry-panel { flex: 1 1 auto; height: auto; }
+.ov-main.dual .rocket-slot { flex-basis: 300px; }
+
+/* Header buttons. */
+.header-btn { font-size: 11px; letter-spacing: 0.08em; padding: 5px 10px; }
+/* Filled while a preview is showing. */
+.header-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+.no-signal { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-faint); }
+.no-signal .icon { font-size: 40px; opacity: 0.5; }
+.video-live-dot {
+  position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--err); box-shadow: 0 0 8px var(--err); animation: pulse 1.4s ease-in-out infinite;
+}
+
+.ov-right .sponsor-panel { flex: 0 0 auto; }
+
+/* Fixed height: sections hold different numbers of logos, and the panel must not
+   resize as they rotate or the whole right column would reflow on every cycle. */
+.sponsor-panel { height: 240px; display: flex; flex-direction: column; }
+.sponsor-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px; /* = GAP in SponsorPanel.tsx */
+  transition: opacity 450ms ease; /* FADE_MS in SponsorPanel.tsx */
+}
+.sponsor-row { display: flex; justify-content: center; gap: 8px; }
+/* Logo fills its slot. */
+.sponsor-row > div > .logo-plate { width: 100%; height: 100%; }
+
+/* Every plate is the same box no matter what it holds — identical geometry is
+   what makes a set of mismatched supplied logos read as one wall. Only the
+   background colour varies, and it's derived per-logo in lib/logo.ts. */
+.logo-plate {
+  position: relative;
+  border-radius: 5px;
+  overflow: hidden;
+  padding: 7px 9px;
+  background: #eef1f5;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.10);
+  min-height: 0;
+}
+/* Dark plates need a light hairline instead — a dark inset edge vanishes. */
+.logo-plate.on-dark { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.logo-fit { position: relative; width: 100%; height: 100%; overflow: hidden; }
+
+.sponsor-dots { display: flex; height: 5px; gap: 5px; justify-content: center; margin-top: 8px; }
+.sponsor-dots span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text-faint); opacity: 0.35; transition: opacity 250ms ease;
+}
+.sponsor-dots span.on { opacity: 1; }
+
+.awaiting { display: grid; place-items: center; color: var(--text-faint);
+  letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; }
