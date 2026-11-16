@@ -7,9 +7,10 @@ import { playWhep, type WhepSession } from "../lib/whep";
 //                   both OBS and this overlay share the single capture card.
 //   local-capture — STANDALONE only: no go2rtc node running, so read the capture
 //                   card directly in the browser via getUserMedia.
-export function VideoPanel({ config }: { config: MissionConfig }) {
+// `camera`: 0 = first feed, 1 = second feed.
+export function VideoPanel({ config, camera = 0 }: { config: MissionConfig; camera?: 0 | 1 }) {
   const mode = config.ui?.video_source ?? "webrtc-url";
-  const videoUrl = config.ui?.video_url;
+  const videoUrl = camera === 0 ? config.ui?.video_url : config.ui?.video_url_2;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -22,15 +23,39 @@ export function VideoPanel({ config }: { config: MissionConfig }) {
 
     if (mode === "local-capture") {
       let stream: MediaStream | null = null;
-      navigator.mediaDevices
-        ?.getUserMedia({ video: true, audio: false })
-        .then((s) => { stream = s; video.srcObject = s; setLive(true); })
-        .catch((e) => setErr(String(e)));
-      return () => { stream?.getTracks().forEach((t) => t.stop()); };
+      let cancelled = false;
+      const open = async () => {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (camera === 1) {
+          // Switch to the second camera if there is one.
+          const cams = (await navigator.mediaDevices.enumerateDevices())
+            .filter((d) => d.kind === "videoinput");
+          if (cams.length > 1) {
+            try {
+              const second = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: cams[1].deviceId } }, audio: false,
+              });
+              stream.getTracks().forEach((t) => t.stop());
+              stream = second;
+            } catch {
+              /* not available: keep the first camera */
+            }
+          }
+        }
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        video.srcObject = stream;
+        setLive(true);
+      };
+      open().catch((e) => setErr(String(e)));
+      return () => { cancelled = true; stream?.getTracks().forEach((t) => t.stop()); };
     }
 
     // webrtc-url
-    if (!videoUrl) { setErr("no ui.video_url configured for webrtc-url mode"); return; }
+    if (!videoUrl) {
+      setErr(camera === 0 ? "no ui.video_url configured for webrtc-url mode"
+        : "no ui.video_url_2 configured for the second camera");
+      return;
+    }
     let session: WhepSession | null = null;
     let retry: number | undefined;
     let cancelled = false;
@@ -54,7 +79,7 @@ export function VideoPanel({ config }: { config: MissionConfig }) {
 
     connect();
     return () => { cancelled = true; window.clearTimeout(retry); session?.close(); };
-  }, [mode, videoUrl]);
+  }, [mode, videoUrl, camera]);
 
   return (
     <div className="video-fit">
@@ -64,7 +89,7 @@ export function VideoPanel({ config }: { config: MissionConfig }) {
           <div className="no-signal">
             <span className="icon">◉</span>
             <span className="upper">No signal · stream offline</span>
-            {mode === "webrtc-url" && <span className="mono" style={{ fontSize: 10 }}>connecting to {videoUrl}…</span>}
+            {mode === "webrtc-url" && videoUrl && <span className="mono" style={{ fontSize: 10 }}>connecting to {videoUrl}…</span>}
             {mode === "local-capture" && <span className="mono" style={{ fontSize: 10 }}>waiting for camera permission…</span>}
             {err && <span className="mono" style={{ fontSize: 10, color: "var(--err)" }}>{err}</span>}
           </div>

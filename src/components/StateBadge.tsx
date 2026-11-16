@@ -1,6 +1,6 @@
-import { stateColor } from "../lib/colors";
 import type { FlightState } from "../lib/telemetry";
 
+// Flight state as plain text.
 export function StateBadge({
   state, size = "md", live = true,
 }: {
@@ -8,29 +8,16 @@ export function StateBadge({
   size?: "md" | "lg";
   live?: boolean;
 }) {
-  const s = state ?? "UNKNOWN";
-  const color = stateColor(s);
-  const big = size === "lg";
+  const title = (state ?? "UNKNOWN")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   return (
     <div
       className={live ? "" : "stale"}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 10,
-        padding: big ? "10px 18px" : "5px 10px",
-        border: `1px solid ${color}`,
-        borderRadius: 4,
-        background: `${color}18`,
-      }}
+      style={{ fontSize: size === "lg" ? 30 : 14, fontWeight: 700, lineHeight: 1.1, color: "var(--text)" }}
     >
-      <span className="dot" style={{ background: color }} />
-      <span
-        className="mono upper"
-        style={{ color, fontSize: big ? 30 : 14, fontWeight: 700, letterSpacing: "0.06em" }}
-      >
-        {s.replace("_", " ")}
-      </span>
+      {title}
     </div>
   );
 }

@@ -247,6 +247,8 @@ export interface MissionConfig {
   rocket_name?: string;
   callsign?: string;
   expected_apogee_m?: number;
+  // Extra facts for the pre-launch screen, e.g. [{ "label": "Motor", "value": "M1340" }].
+  rocket_facts?: { label: string; value: string }[];
   gyro_units?: "deg" | "rad"; // units of TelemetryPacket gyro_x/y/z (assumed deg/s)
   ground_station?: { label?: string; lat: number; lon: number; alt_m: number };
   // No rfd900x here: the ground modem's registers come from the modem itself,
@@ -264,6 +266,8 @@ export interface MissionConfig {
     //   local-capture -> browser reads the capture card directly (STANDALONE)
     video_source?: "webrtc-url" | "local-capture";
     video_url?: string; // WHEP endpoint for webrtc-url mode (go2rtc node)
+    // Second camera feed for two-camera mode.
+    video_url_2?: string;
   };
 }
 

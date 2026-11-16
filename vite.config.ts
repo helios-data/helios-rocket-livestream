@@ -4,7 +4,7 @@ import { resolve } from "path";
 
 // Multi-page build: /admin and /overlay are separate entry HTML files.
 // base='/static/' so hashed bundles are served by FastAPI at /static/* while
-// admin.html / overlay.html are served by the backend routes. /api, /ws, /brand
+// admin.html / overlay.html are served by the backend routes. /api, /ws, /brand, /sponsors
 // are proxied to the backend during `npm run dev`.
 export default defineConfig({
   base: "/static/",
@@ -24,6 +24,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://127.0.0.1:8090",
       "/brand": "http://127.0.0.1:8090",
+      "/sponsors": "http://127.0.0.1:8090", // sponsor logos (SponsorPanel)
       "/ws": { target: "ws://127.0.0.1:8090", ws: true },
     },
   },

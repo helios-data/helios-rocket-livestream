@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
-import { SERIES } from "../lib/colors";
 import type { MissionStore } from "../lib/store";
-import { PlotLegend, type LegendItem } from "./PlotLegend";
+import { FLIGHT_ORDER, VIEWER_LABEL } from "../lib/eventmeta";
 
-type WindowMode = "full" | "follow";
-const FOLLOW_SECONDS = 30;
-const PREROLL_SECONDS = 5; // static window locks its start this long before ascent
+const PREROLL_SECONDS = 5; // the window starts this long before liftoff
 
+// Seconds -> m:ss (rounded to avoid 1:59.999).
+const mmss = (v: number) => {
+  const s = Math.round(v);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+// Altitude over the whole flight.
 export function AltitudeChart({
   store, height = 240, liveHz = 8, dark = true, fill = false,
 }: {
@@ -19,44 +23,47 @@ export function AltitudeChart({
   fill?: boolean; // fill parent height instead of using `height`
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const plotRef = useRef<uPlot | null>(null);
-  const [mode, setMode] = useState<WindowMode>("full");
-  const modeRef = useRef<WindowMode>(mode);
   const liftoffRef = useRef(0);
-  modeRef.current = mode;
 
   useEffect(() => {
     if (!ref.current) return;
-    const measuredH = () => (fill ? Math.max(120, ref.current!.clientHeight) : height);
-    const stroke = dark ? "#6b7385" : "#5a6472";
-    const gridColor = dark ? "#1b2230" : "#d6dde8";
-    const grid = { stroke: gridColor, width: 1 };
-    const axis = { stroke, grid, ticks: grid, font: "11px Inconsolata, monospace" };
+    const measuredH = () => (fill ? Math.max(80, ref.current!.clientHeight) : height);
+    const text = dark ? "rgba(230,235,242,0.55)" : "rgba(22,32,46,0.6)";
+    const faint = dark ? "rgba(230,235,242,0.08)" : "rgba(22,32,46,0.1)";
+    const lineColor = dark ? "#e6ebf2" : "#16202e";
+    const font = "12px Inconsolata, monospace";
 
-    // Event annotation markers: vertical dashed lines + top labels.
-    const annotationPlugin: uPlot.Plugin = {
+    // Event markers: vertical line + label.
+    const markerPlugin: uPlot.Plugin = {
       hooks: {
         draw: (u) => {
           const { ctx } = u;
           const top = u.bbox.top;
           const bottom = u.bbox.top + u.bbox.height;
+          const dpr = devicePixelRatio;
           ctx.save();
-          ctx.font = "10px Inconsolata, monospace";
-          ctx.textAlign = "center";
+          ctx.font = `${11 * dpr}px Inconsolata, monospace`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "top";
+          // Skip events from a previous flight.
+          const reached = FLIGHT_ORDER[store.mission?.flight_state ?? "UNKNOWN"];
           for (const a of store.annotations) {
+            const label = VIEWER_LABEL[a.type]?.toUpperCase();
+            if (!label || FLIGHT_ORDER[a.type] > reached) continue;
             if (a.x < u.scales.x.min! || a.x > u.scales.x.max!) continue;
             const px = Math.round(u.valToPos(a.x, "x", true));
-            ctx.strokeStyle = a.color;
-            ctx.globalAlpha = 0.55;
-            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = faint;
+            ctx.lineWidth = dpr;
             ctx.beginPath();
             ctx.moveTo(px, top);
             ctx.lineTo(px, bottom);
             ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = a.color;
-            ctx.fillText(a.label, px, top + 10);
+            ctx.fillStyle = text;
+            // Flip the label left near the edge.
+            const w = ctx.measureText(label).width;
+            const fits = px + 6 * dpr + w <= u.bbox.left + u.bbox.width;
+            ctx.textAlign = fits ? "left" : "right";
+            ctx.fillText(label, fits ? px + 6 * dpr : px - 6 * dpr, top + 2 * dpr);
           }
           ctx.restore();
         },
@@ -66,39 +73,60 @@ export function AltitudeChart({
     const opts: uPlot.Options = {
       width: ref.current.clientWidth,
       height: measuredH(),
-      padding: [16, 12, 4, 8],
-      cursor: { drag: { x: true, y: false } },
+      padding: [20, 16, 0, 0],
+      cursor: { show: false }, // broadcast: nobody hovers
       legend: { show: false },
-      plugins: [annotationPlugin],
+      plugins: [markerPlugin],
       scales: {
         x: {
           time: false,
           range: (_u, dataMin, dataMax) => {
             if (dataMax == null) return [0, 1];
-            if (modeRef.current === "follow") {
-              return [Math.max(dataMin ?? 0, dataMax - FOLLOW_SECONDS), dataMax];
-            }
-            // static full-flight: lock start a few seconds before ascent
             const start = liftoffRef.current > 0 ? liftoffRef.current - PREROLL_SECONDS : (dataMin ?? 0);
             return [start, dataMax];
           },
         },
+        y: { range: (_u, _min, max) => [0, Math.max(100, max ?? 0) * 1.08] },
       },
       axes: [
-        { ...axis, values: (_u, vals) => vals.map((v) => `${v}s`) },
-        { ...axis, size: 52, values: (_u, vals) => vals.map((v) => `${v}m`) },
+        {
+          // Height of the time labels only (default leaves a gap).
+          stroke: text, font, grid: { show: false }, ticks: { show: false }, gap: 6, size: 24,
+          // Ticks every 10/30/60 s from liftoff.
+          splits: (_u, _i, min, max) => {
+            const t0 = liftoffRef.current;
+            const span = max - min;
+            const step = span <= 60 ? 10 : span <= 180 ? 30 : 60;
+            const out: number[] = [];
+            for (let k = Math.ceil((min - t0) / step); t0 + k * step <= max; k++) {
+              if (k >= 0) out.push(t0 + k * step);
+            }
+            return out;
+          },
+          values: (_u, vals) => vals.map((v) => mmss(Math.max(0, v - liftoffRef.current))),
+        },
+        {
+          stroke: text, font, size: 72, gap: 8, ticks: { show: false },
+          grid: { stroke: faint, width: 1 },
+          // Round steps, at least ~26px apart.
+          splits: (u, _i, _min, max) => {
+            const plotPx = u.bbox.height / devicePixelRatio;
+            const maxTicks = Math.max(2, Math.floor(plotPx / 26) + 1);
+            const steps = [100, 200, 500, 1000, 2000, 5000, 10000];
+            const step = steps.find((s) => Math.floor(max / s) + 1 <= maxTicks) ?? steps[steps.length - 1];
+            const out: number[] = [];
+            for (let v = 0; v <= max; v += step) out.push(v);
+            return out;
+          },
+          values: (_u, vals) => vals.map((v) => `${v.toLocaleString()} m`),
+        },
       ],
       series: [
-        { label: "t+ (s)" },
-        { label: "Baro avg AGL", stroke: SERIES.baroAvg, width: 2, points: { show: false } },
-        { label: "Kalman", stroke: SERIES.kf, width: 1, points: { show: false } },
-        // spanGaps: the COTS series is null between the sparse APRS packets, so
-        // this bridges those gaps with a straight line between adjacent points.
-        { label: "COTS AGL", stroke: SERIES.cots, width: 1.5, points: { show: false }, spanGaps: true },
+        {},
+        { stroke: lineColor, width: 2, points: { show: false } },
       ],
     };
-    const plot = new uPlot(opts, [[], [], [], []], ref.current);
-    plotRef.current = plot;
+    const plot = new uPlot(opts, [[], []], ref.current);
 
     const ro = new ResizeObserver(() =>
       plot.setSize({ width: ref.current!.clientWidth, height: measuredH() }));
@@ -111,44 +139,11 @@ export function AltitudeChart({
       let liftoffX = 0;
       for (let i = 0; i < n; i++) { if (a.baroAvg[i] > 5) { liftoffX = a.x[i]; break; } }
       liftoffRef.current = liftoffX;
-      plot.setData([a.x, a.baroAvg, a.kf, a.cots as number[]]);
+      plot.setData([a.x, a.baroAvg]);
     }, 1000 / liveHz);
 
     return () => { window.clearInterval(timer); ro.disconnect(); plot.destroy(); };
   }, [store, height, liveHz, dark, fill]);
 
-  const legend: LegendItem[] = [
-    { label: "Baro avg AGL", color: SERIES.baroAvg },
-    { label: "Kalman", color: SERIES.kf },
-    { label: "COTS AGL", color: SERIES.cots },
-  ];
-
-  return (
-    <div style={{ position: "relative", height: fill ? "100%" : undefined }}>
-      <PlotLegend items={legend} corner="bl" />
-      <div
-        style={{ position: "absolute", top: 2, right: 8, zIndex: 2, display: "flex", gap: 4 }}
-      >
-        <WindowBtn active={mode === "full"} onClick={() => setMode("full")} label="FULL" />
-        <WindowBtn active={mode === "follow"} onClick={() => setMode("follow")} label="FOLLOW" />
-      </div>
-      <div ref={ref} style={{ width: "100%", height: fill ? "100%" : height }} />
-    </div>
-  );
-}
-
-function WindowBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "1px 7px", fontSize: 9, letterSpacing: "0.08em",
-        borderColor: active ? "var(--accent-cyan)" : "var(--line)",
-        color: active ? "var(--accent-cyan)" : "var(--text-dim)",
-        background: active ? "color-mix(in srgb, var(--accent-cyan) 12%, transparent)" : "var(--bg-elev)",
-      }}
-    >
-      {label}
-    </button>
-  );
+  return <div ref={ref} style={{ width: "100%", height: fill ? "100%" : height }} />;
 }

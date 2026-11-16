@@ -74,6 +74,7 @@ export class MissionStore {
   sradTrack: [number, number][] = []; // [lon, lat]
   cotsTrack: [number, number][] = [];
   private _t0ms: number | null = null;
+  private _lastTsMs: number | null = null; // previous SRAD timestamp_ms, to spot FC clock resets
   private _lastCotsAlt: number | null = null;
   // True when a new COTS altitude has arrived since the last SRAD tick. The COTS
   // series shares the SRAD timebase but APRS is far slower, so we plot the real
@@ -258,7 +259,18 @@ export class MissionStore {
   }
 
   private _pushSradSeries(f: SradFrame) {
-    if (this._t0ms === null) this._t0ms = f.timestamp_ms;
+    // Timestamp went backwards (FC reboot or sim loop): start a new series.
+    const last = this._lastTsMs;
+    this._lastTsMs = f.timestamp_ms;
+    if (last !== null && f.timestamp_ms < last) {
+      this.alt = { x: [], baroAvg: [], kf: [], cots: [] };
+      this.sradTrack = [];
+      this._t0ms = null;
+    }
+    if (this._t0ms === null) {
+      this._t0ms = f.timestamp_ms;
+      this._recomputeAnnotations();
+    }
     const x = (f.timestamp_ms - (this._t0ms ?? 0)) / 1000;
     push(this.alt.x, x, MAX_POINTS);
     push(this.alt.baroAvg, f.altitude_agl_m, MAX_POINTS);
